@@ -175,8 +175,8 @@ Ensure you have the following installed on your machine:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/interview-iq-ai.git
-cd interview-iq-ai
+git clone https://github.com/Mahavirhota/InterviewIQ-AI.git
+cd InterviewIQ-AI
 ```
 
 ### 2. Install Dependencies
