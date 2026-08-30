@@ -448,7 +448,7 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 
 **Built with ❤️ for developers, designers, and builders.**
 
-[Report Bug](https://github.com/your-username/interview-iq-ai/issues) · [Request Feature](https://github.com/your-username/interview-iq-ai/issues) · [Documentation](https://github.com/your-username/interview-iq-ai/wiki)
+[Report Bug](https://github.com/Mahavirhota/InterviewIQ-AI/issues) · [Request Feature](https://github.com/Mahavirhota/InterviewIQ-AI/issues) · [Documentation](https://github.com/Mahavirhota/InterviewIQ-AI/wiki)
 
 </div>
 # InterviewIQ-AI
