@@ -10,15 +10,15 @@ test.describe("InterviewIQ AI Public Flow", () => {
     await expect(mainHeading).toContainText("Master your next tech interview");
 
     // Verify presence of navigation elements
-    const brandName = page.locator("text=InterviewIQ AI");
+    const brandName = page.getByRole("banner").getByText("InterviewIQ AI");
     await expect(brandName).toBeVisible();
 
     // Verify navigation links
-    const featuresLink = page.locator("text=Features");
+    const featuresLink = page.getByRole("navigation").getByText("Features");
     await expect(featuresLink).toBeVisible();
 
     // Verify main Call To Action button
-    const ctaButton = page.locator("text=Start Practicing Free");
+    const ctaButton = page.getByRole("button", { name: "Start Practicing Free" });
     await expect(ctaButton).toBeVisible();
   });
 
