@@ -98,6 +98,7 @@ export function PracticeArenaClient({ interview }: PracticeArenaClientProps) {
   const [isListening, setIsListening] = React.useState(false);
   const [isSpeakingQuestion, setIsSpeakingQuestion] = React.useState(false);
   const recognitionRef = React.useRef<SpeechRecognitionInstance | null>(null);
+  const audioPlayerRef = React.useRef<HTMLAudioElement | null>(null);
 
   // Safely detect browser speech capabilities across SSR & client
   const speechSupported = React.useSyncExternalStore(
@@ -148,10 +149,15 @@ export function PracticeArenaClient({ interview }: PracticeArenaClientProps) {
 
   // Stop speech or recording when unmounting or switching questions
   const stopAllVoiceOperations = React.useCallback(() => {
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.pause();
+      audioPlayerRef.current.currentTime = 0;
+      audioPlayerRef.current = null;
+    }
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
-      setIsSpeakingQuestion(false);
     }
+    setIsSpeakingQuestion(false);
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       setIsListening(false);
@@ -164,35 +170,67 @@ export function PracticeArenaClient({ interview }: PracticeArenaClientProps) {
     };
   }, [stopAllVoiceOperations]);
 
-  // AI Voice Narration (Text-to-Speech)
-  const toggleSpeakQuestion = () => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-      setError("Text-to-speech is not supported in this browser.");
-      return;
-    }
-
+  // AI Voice Narration (ElevenLabs TTS with browser fallback)
+  const toggleSpeakQuestion = async () => {
     if (isSpeakingQuestion) {
-      window.speechSynthesis.cancel();
-      setIsSpeakingQuestion(false);
+      stopAllVoiceOperations();
       return;
     }
-
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(activeQuestion.questionText);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    utterance.lang = "en-US";
-
-    utterance.onend = () => {
-      setIsSpeakingQuestion(false);
-    };
-
-    utterance.onerror = () => {
-      setIsSpeakingQuestion(false);
-    };
 
     setIsSpeakingQuestion(true);
-    window.speechSynthesis.speak(utterance);
+
+    // 1. Try ElevenLabs API
+    try {
+      const response = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: activeQuestion.questionText }),
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const audioUrl = URL.createObjectURL(blob);
+        const audio = new Audio(audioUrl);
+        audioPlayerRef.current = audio;
+
+        audio.onended = () => {
+          setIsSpeakingQuestion(false);
+          URL.revokeObjectURL(audioUrl);
+        };
+        audio.onerror = () => {
+          setIsSpeakingQuestion(false);
+          URL.revokeObjectURL(audioUrl);
+        };
+
+        await audio.play();
+        return;
+      }
+    } catch (err: unknown) {
+      console.warn("ElevenLabs TTS unavailable, falling back to browser synthesis:", err);
+    }
+
+    // 2. Seamless Fallback: Native Browser Web Speech API
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(activeQuestion.questionText);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.lang = "en-US";
+
+      utterance.onend = () => {
+        setIsSpeakingQuestion(false);
+      };
+
+      utterance.onerror = () => {
+        setIsSpeakingQuestion(false);
+      };
+
+      window.speechSynthesis.speak(utterance);
+      return;
+    }
+
+    setIsSpeakingQuestion(false);
+    setError("Text-to-speech audio is not supported in this browser.");
   };
 
   // Voice Answer Recording (Speech-to-Text)

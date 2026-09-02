@@ -232,10 +232,12 @@ Create a `.env` file in the project root with the following variables:
 | `AUTH_GITHUB_ID` | GitHub OAuth Client ID | ✅ |
 | `AUTH_GITHUB_SECRET` | GitHub OAuth Client Secret | ✅ |
 | `OPENAI_API_KEY` | OpenAI API key for AI features | ⚡ Optional* |
+| `ELEVENLABS_API_KEY` | ElevenLabs API key for AI voice generation | ⚡ Optional* |
+| `ELEVENLABS_VOICE_ID` | ElevenLabs Voice ID (Default: Rachel) | ⚡ Optional |
 | `SENTRY_DSN` | Sentry DSN for error tracking | ⚡ Optional |
 | `NEXT_PUBLIC_APP_URL` | Public-facing app URL | ⚡ Optional |
 
-> **\*** The application runs in **mock mode** when no OpenAI key is provided, returning realistic dummy questions and evaluations so the full UI remains functional.
+> **\*** The application runs in **mock mode** when no OpenAI key is provided, and automatically falls back to browser Web Speech synthesis if no ElevenLabs key is configured.
 
 ### OAuth Redirect URIs
 
