@@ -1,17 +1,6 @@
 import OpenAI from "openai";
 import { z } from "zod";
 
-const apiKey = process.env.OPENAI_API_KEY;
-
-// Use a safe initialization. If no key is set or it's the placeholder, we'll run in mock mode
-const isMockMode = !apiKey || apiKey === "OPENAI_API_KEY Placeholder" || apiKey.trim() === "";
-
-export const openai = new OpenAI({
-  apiKey: isMockMode ? "mock-key" : apiKey,
-  dangerouslyAllowBrowser: true,
-  maxRetries: 0,
-});
-
 // Zod schemas for structured AI outputs
 export const GeneratedQuestionsSchema = z.array(
   z.object({
@@ -30,6 +19,141 @@ export const EvaluationResultSchema = z.object({
 
 export type EvaluationResult = z.infer<typeof EvaluationResultSchema>;
 
+// Provider Configuration Interface
+interface AIProviderConfig {
+  name: string;
+  baseURL?: string;
+  apiKey: string;
+  model: string;
+}
+
+/**
+ * Dynamically resolves all active AI providers ordered by priority.
+ * Automatically discovers Groq, Gemini, OpenRouter, and comma-separated OpenAI keys.
+ */
+function getActiveProviders(): AIProviderConfig[] {
+  const providers: AIProviderConfig[] = [];
+
+  // 1. Groq (Free tier, ultra-low latency)
+  if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim() !== "") {
+    providers.push({
+      name: "Groq (Llama 3.3 70B)",
+      baseURL: "https://api.groq.com/openai/v1",
+      apiKey: process.env.GROQ_API_KEY.trim(),
+      model: "llama-3.3-70b-versatile",
+    });
+  }
+
+  // 2. Google Gemini via OpenAI-compatible endpoint (Free tier)
+  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== "") {
+    providers.push({
+      name: "Google Gemini (2.0 Flash)",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+      apiKey: process.env.GEMINI_API_KEY.trim(),
+      model: "gemini-2.0-flash",
+    });
+  }
+
+  // 3. OpenRouter (Free models)
+  if (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.trim() !== "") {
+    providers.push({
+      name: "OpenRouter (Free Llama 3.3)",
+      baseURL: "https://openrouter.ai/api/v1",
+      apiKey: process.env.OPENROUTER_API_KEY.trim(),
+      model: "meta-llama/llama-3.3-70b-instruct:free",
+    });
+  }
+
+  // 4. OpenAI (Support multiple comma-separated keys for load-balancing / rotation)
+  const rawOpenAIKeys = [
+    ...(process.env.OPENAI_API_KEYS ? process.env.OPENAI_API_KEYS.split(",") : []),
+    ...(process.env.OPENAI_API_KEY ? [process.env.OPENAI_API_KEY] : []),
+  ];
+
+  const validOpenAIKeys = Array.from(
+    new Set(
+      rawOpenAIKeys
+        .map((k) => k.trim())
+        .filter(
+          (k) =>
+            k &&
+            !k.startsWith("mock") &&
+            k !== "OPENAI_API_KEY Placeholder" &&
+            k !== "sk-proj-placeholder"
+        )
+    )
+  );
+
+  validOpenAIKeys.forEach((key, index) => {
+    providers.push({
+      name: `OpenAI Key #${index + 1} (gpt-4o-mini)`,
+      apiKey: key,
+      model: "gpt-4o-mini",
+    });
+  });
+
+  return providers;
+}
+
+// Default export client for backward compatibility
+const defaultProviders = getActiveProviders();
+export const openai = new OpenAI({
+  apiKey: defaultProviders[0]?.apiKey || "mock-key",
+  baseURL: defaultProviders[0]?.baseURL,
+  dangerouslyAllowBrowser: true,
+  maxRetries: 0,
+});
+
+/**
+ * Resilient completion helper that tries providers sequentially.
+ * If one fails (e.g. 429 Insufficient Quota / Rate Limit), it seamlessly fails over to the next.
+ */
+async function executeWithFailover(
+  systemPrompt: string,
+  userPrompt: string,
+  temperature = 0.7
+): Promise<string> {
+  const providers = getActiveProviders();
+
+  if (providers.length === 0) {
+    throw new Error("NO_AI_PROVIDERS_CONFIGURED");
+  }
+
+  let lastError: unknown = null;
+
+  for (const provider of providers) {
+    try {
+      const client = new OpenAI({
+        apiKey: provider.apiKey,
+        baseURL: provider.baseURL,
+        dangerouslyAllowBrowser: true,
+        maxRetries: 0,
+        timeout: 15000,
+      });
+
+      const response = await client.chat.completions.create({
+        model: provider.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (content && content.trim() !== "") {
+        return content;
+      }
+    } catch (error: unknown) {
+      lastError = error;
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.warn(`[AI Failover Warning] Provider '${provider.name}' failed (${errorMsg}). Trying next provider...`);
+    }
+  }
+
+  throw lastError || new Error("All configured AI providers failed.");
+}
+
 /**
  * Generates 5 structured interview questions based on topic, difficulty, role, and instructions.
  */
@@ -39,13 +163,8 @@ export async function generateQuestions(
   difficulty: string,
   customInstructions?: string
 ): Promise<GeneratedQuestion[]> {
-  if (isMockMode) {
-    // Return high-quality realistic mock questions to ensure immediate usability
-    return getMockQuestions(role, topic, difficulty);
-  }
-
-  try {
-    const prompt = `You are an expert interviewer. Generate exactly 5 highly relevant interview questions for the following candidate profile:
+  const systemPrompt = "You are a helpful, professional AI technical interviewer that outputs strictly formatted JSON.";
+  const prompt = `You are an expert interviewer. Generate exactly 5 highly relevant interview questions for the following candidate profile:
 - **Role**: ${role}
 - **Topic/Focus**: ${topic}
 - **Difficulty Level**: ${difficulty}
@@ -61,28 +180,14 @@ Array<{ questionText: string; suggestedRubric: string; }>
 \`\`\`
 Do not include markdown wrappers like \`\`\`json. Return pure JSON.`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "You are a helpful, professional AI technical interviewer that outputs strictly formatted JSON.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      temperature: 0.7,
-    });
-
-    const content = response.choices[0]?.message?.content || "";
-    const cleanedContent = content.replace(/```json|```/g, "").trim();
+  try {
+    const rawContent = await executeWithFailover(systemPrompt, prompt, 0.7);
+    const cleanedContent = rawContent.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(cleanedContent);
     return GeneratedQuestionsSchema.parse(parsed);
-  } catch (error) {
-    console.error("OpenAI API Question Generation Error:", error);
-    // Fallback to mock data on failure
+  } catch (error: unknown) {
+    console.error("[Question Generation Fallback Triggered]:", error instanceof Error ? error.message : error);
+    // Graceful offline fallback to guarantee 100% uptime
     return getMockQuestions(role, topic, difficulty);
   }
 }
@@ -95,12 +200,12 @@ export async function evaluateAnswer(
   answerText: string,
   suggestedRubric: string
 ): Promise<EvaluationResult> {
-  if (isMockMode || !answerText || answerText.trim() === "") {
+  if (!answerText || answerText.trim() === "") {
     return getMockEvaluation(questionText, answerText);
   }
 
-  try {
-    const prompt = `You are a Senior AI Interviewer. Grade the candidate's answer to the following question:
+  const systemPrompt = "You are an objective AI interviewer that evaluates answers constructively and returns JSON.";
+  const prompt = `You are a Senior AI Interviewer. Grade the candidate's answer to the following question:
 
 **Question**: ${questionText}
 **Evaluation Rubric**: ${suggestedRubric || "Assess based on technical correctness, clarity, and depth."}
@@ -122,27 +227,13 @@ Respond ONLY with a JSON object matching this structure:
 }
 Do not include markdown wrappers like \`\`\`json. Return pure JSON.`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "You are an objective AI interviewer that evaluates answers constructively and returns JSON.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      temperature: 0.5,
-    });
-
-    const content = response.choices[0]?.message?.content || "";
-    const cleanedContent = content.replace(/```json|```/g, "").trim();
+  try {
+    const rawContent = await executeWithFailover(systemPrompt, prompt, 0.5);
+    const cleanedContent = rawContent.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(cleanedContent);
     return EvaluationResultSchema.parse(parsed);
-  } catch (error) {
-    console.error("OpenAI API Answer Evaluation Error:", error);
+  } catch (error: unknown) {
+    console.error("[Answer Evaluation Fallback Triggered]:", error instanceof Error ? error.message : error);
     return getMockEvaluation(questionText, answerText);
   }
 }
@@ -176,7 +267,7 @@ function getMockQuestions(role: string, topic: string, difficulty: string): Gene
 
 function getMockEvaluation(questionText: string, answerText: string): EvaluationResult {
   const answerLength = answerText?.trim().length || 0;
-  
+
   if (answerLength < 10) {
     return {
       score: 15,

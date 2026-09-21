@@ -7,6 +7,14 @@ const TTSRequestSchema = z.object({
   voiceId: z.string().optional(),
 });
 
+// Verified free-tier premade voices
+const PREMADE_VOICES = [
+  "EXAVITQu4vr4xnSDxMaL", // Sarah (Mature, Reassuring, Confident)
+  "Xb7hH8MSUJpSbSDYk0k2", // Alice (Clear, Engaging Educator)
+  "JBFqnCBsd6RMkjVDRZzb", // George (Warm Storyteller)
+  "IKne3meq5aSn9XLyUdCD", // Charlie (Deep, Confident)
+];
+
 export async function POST(req: Request) {
   try {
     // 1. Authenticate user
@@ -33,41 +41,58 @@ export async function POST(req: Request) {
       );
     }
 
-    const voiceId = customVoiceId || process.env.ELEVENLABS_VOICE_ID?.trim() || "21m00Tcm4TlvDq8ikWAM"; // Default: Rachel
+    // Determine voice IDs to try (custom/configured first, followed by verified premade fallbacks)
+    const preferredVoiceId = customVoiceId || process.env.ELEVENLABS_VOICE_ID?.trim() || PREMADE_VOICES[0];
+    const voiceCandidates = Array.from(new Set([preferredVoiceId, ...PREMADE_VOICES]));
 
-    // 4. Call ElevenLabs API
-    const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
-      {
-        method: "POST",
-        headers: {
-          "xi-api-key": apiKey,
-          "Content-Type": "application/json",
-          "Accept": "audio/mpeg",
-        },
-        body: JSON.stringify({
-          text,
-          model_id: "eleven_turbo_v2_5",
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-            style: 0.0,
-            use_speaker_boost: true,
-          },
-        }),
+    let audioBuffer: ArrayBuffer | null = null;
+    let lastError = "";
+
+    // 4. Try synthesizing with fallback across valid premade voices if library voice returns 402
+    for (const voiceId of voiceCandidates) {
+      try {
+        const response = await fetch(
+          `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
+          {
+            method: "POST",
+            headers: {
+              "xi-api-key": apiKey,
+              "Content-Type": "application/json",
+              "Accept": "audio/mpeg",
+            },
+            body: JSON.stringify({
+              text,
+              model_id: "eleven_turbo_v2_5",
+              voice_settings: {
+                stability: 0.5,
+                similarity_boost: 0.75,
+                style: 0.0,
+                use_speaker_boost: true,
+              },
+            }),
+          }
+        );
+
+        if (response.ok) {
+          audioBuffer = await response.arrayBuffer();
+          break;
+        } else {
+          lastError = await response.text().catch(() => `HTTP ${response.status}`);
+          console.warn(`[ElevenLabs TTS] Voice ${voiceId} returned status ${response.status}. Trying premade fallback...`);
+        }
+      } catch (fetchErr: unknown) {
+        lastError = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+        console.warn(`[ElevenLabs TTS] Fetch error for voice ${voiceId}: ${lastError}`);
       }
-    );
-
-    if (!response.ok) {
-      const errorDetail = await response.text().catch(() => "Unknown error");
-      console.error(`ElevenLabs API returned status ${response.status}:`, errorDetail);
-      return NextResponse.json(
-        { error: "ElevenLabs TTS synthesis failed", fallback: true },
-        { status: response.status }
-      );
     }
 
-    const audioBuffer = await response.arrayBuffer();
+    if (!audioBuffer) {
+      console.error("ElevenLabs TTS failed for all candidate voices. Last error:", lastError);
+      return NextResponse.json(
+        { error: "ElevenLabs TTS synthesis failed", fallback: true },
+        { status: 502 }
+      );
+    }
 
     return new Response(audioBuffer, {
       status: 200,

@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     if (!session || !session.user || !session.user.id) {
       return NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 });
     }
-    const userId = session.user.id;
+    const { id: userId, email, name, image } = session.user;
 
     // 2. Validate request body
     const body = await req.json();
@@ -39,6 +39,18 @@ export async function POST(req: Request) {
 
     // 4. Save to Database in a Prisma Transaction
     const interview = await db.$transaction(async (tx) => {
+      // Ensure user record exists in DB to prevent foreign key errors if DB was reset
+      await tx.user.upsert({
+        where: { id: userId },
+        update: {},
+        create: {
+          id: userId,
+          email,
+          name,
+          image,
+        },
+      });
+
       // Create Interview Session
       const newInterview = await tx.interview.create({
         data: {

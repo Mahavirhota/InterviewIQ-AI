@@ -2,21 +2,47 @@
 
 import * as React from "react";
 import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { GitBranch, Globe, ShieldCheck } from "lucide-react";
+import { GitBranch, Globe, ShieldCheck, AlertCircle } from "lucide-react";
 import Link from "next/link";
 
-export default function LoginPage() {
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const errorParam = searchParams.get("error");
   const [isLoadingGoogle, setIsLoadingGoogle] = React.useState(false);
   const [isLoadingGithub, setIsLoadingGithub] = React.useState(false);
+
+  // Map NextAuth error codes to user-friendly messages
+  const getErrorMessage = (error: string | null) => {
+    if (!error) return null;
+    switch (error) {
+      case "OAuthSignin":
+      case "OAuthCallbackError":
+        return "Could not connect to the OAuth provider. Please verify your client ID, secret, and redirect URI.";
+      case "OAuthAccountNotLinked":
+        return "An account with this email already exists using another sign-in method.";
+      case "AccessDenied":
+        return "Access was denied by the OAuth provider.";
+      case "Configuration":
+        return "There is a configuration issue with the authentication server.";
+      default:
+        return `Authentication error: ${error}. Please check your credentials and try again.`;
+    }
+  };
+
+  const errorMessage = getErrorMessage(errorParam);
 
   const handleLogin = async (provider: "google" | "github") => {
     if (provider === "google") setIsLoadingGoogle(true);
     if (provider === "github") setIsLoadingGithub(true);
 
     try {
-      await signIn(provider, { redirectTo: "/dashboard" });
+      await signIn(provider, {
+        callbackUrl: "/dashboard",
+        redirectTo: "/dashboard",
+      });
     } catch (err) {
       console.error("Authentication Error:", err);
     } finally {
@@ -40,14 +66,21 @@ export default function LoginPage() {
       </Link>
 
       <Card className="w-full max-w-md border border-border bg-card/60 backdrop-blur-md shadow-2xl">
-        <CardHeader className="text-center pb-8 border-b border-border/50">
+        <CardHeader className="text-center pb-6 border-b border-border/50">
           <CardTitle className="text-2xl font-bold tracking-tight text-foreground">Welcome Back</CardTitle>
           <CardDescription className="text-sm text-muted-foreground mt-2">
             Sign in to access your mock interview arena and analytics.
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="pt-8 space-y-4">
+        <CardContent className="pt-6 space-y-4">
+          {errorMessage && (
+            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm leading-relaxed">
+              <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
           {/* Google Button */}
           <Button
             variant="outline"
@@ -93,5 +126,13 @@ export default function LoginPage() {
         By signing in, you agree to our terms and allow access to your basic public profile information.
       </p>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-background text-muted-foreground">Loading...</div>}>
+      <LoginForm />
+    </React.Suspense>
   );
 }

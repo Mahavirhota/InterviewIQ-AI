@@ -21,6 +21,14 @@ export function Sidebar() {
   const toggleSidebar = () => setIsOpen(!isOpen);
   const closeSidebar = () => setIsOpen(false);
 
+  const handleSignOut = async () => {
+    try {
+      await signOut({ callbackUrl: "/login", redirectTo: "/login" });
+    } catch {
+      window.location.href = "/login";
+    }
+  };
+
   return (
     <>
       {/* Mobile Header */}
@@ -129,7 +137,7 @@ export function Sidebar() {
           <Button
             variant="ghost"
             className="w-full justify-start rounded-xl text-red-400 hover:bg-red-500/10 hover:text-red-300 focus-visible:ring-red-500"
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={handleSignOut}
           >
             <LogOut className="mr-3 h-5 w-5 flex-shrink-0" aria-hidden="true" />
             Sign Out
