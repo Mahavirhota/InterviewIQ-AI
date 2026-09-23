@@ -10,6 +10,16 @@ jobs:
   build-and-test:
     runs-on: ubuntu-24.04
 
+    # Job-level env: available to every step automatically.
+    # DIRECT_URL equals DATABASE_URL in CI because there is no connection pooler.
+    # Prisma's schema.prisma references both vars, so both must be set.
+    env:
+      DATABASE_URL: "postgresql://postgres:postgres_password@localhost:5432/interview_iq?schema=public"
+      DIRECT_URL: "postgresql://postgres:postgres_password@localhost:5432/interview_iq?schema=public"
+      AUTH_SECRET: "mock-auth-secret-for-ci-pipelines-12345"
+      OPENAI_API_KEY: "mock-openai-key"
+      NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+
     services:
       postgres:
         image: postgres:16-alpine
@@ -19,7 +29,6 @@ jobs:
           POSTGRES_DB: interview_iq
         ports:
           - 5432:5432
-        # Set health checks to wait for postgres to stand up
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -44,34 +53,18 @@ jobs:
 
     - name: Generate Prisma Client Types
       run: npx prisma generate
-      env:
-        DATABASE_URL: "postgresql://postgres:postgres_password@localhost:5432/interview_iq?schema=public"
 
     - name: Run Database Migrations
       run: npx prisma db push
-      env:
-        DATABASE_URL: "postgresql://postgres:postgres_password@localhost:5432/interview_iq?schema=public"
 
     - name: Run Jest Unit & Integration Tests
       run: npm run test:coverage
-      env:
-        DATABASE_URL: "postgresql://postgres:postgres_password@localhost:5432/interview_iq?schema=public"
-        AUTH_SECRET: "mock-auth-secret-for-ci-pipelines-12345"
-        OPENAI_API_KEY: "mock-openai-key"
 
     - name: Verify Production Next.js Build
       run: npm run build
-      env:
-        DATABASE_URL: "postgresql://postgres:postgres_password@localhost:5432/interview_iq?schema=public"
-        AUTH_SECRET: "mock-auth-secret-for-ci-pipelines-12345"
-        NEXT_PUBLIC_APP_URL: "http://localhost:3000"
 
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
 
     - name: Run Playwright E2E Tests
       run: npm run test:e2e
-      env:
-        DATABASE_URL: "postgresql://postgres:postgres_password@localhost:5432/interview_iq?schema=public"
-        AUTH_SECRET: "mock-auth-secret-for-ci-pipelines-12345"
-        OPENAI_API_KEY: "mock-openai-key"
