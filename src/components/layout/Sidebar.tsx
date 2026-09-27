@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
-import { LayoutDashboard, BrainCircuit, BarChart3, LogOut, Menu, X, User } from "lucide-react";
+import { LayoutDashboard, BrainCircuit, BarChart3, LogOut, Menu, X, User, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function Sidebar() {
@@ -16,6 +16,7 @@ export function Sidebar() {
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { name: "Interview Arena", href: "/generator", icon: BrainCircuit },
     { name: "Performance Insights", href: "/analytics", icon: BarChart3 },
+    { name: "Billing & Plan", href: "/billing", icon: Crown },
   ];
 
   const toggleSidebar = () => setIsOpen(!isOpen);
@@ -93,9 +94,20 @@ export function Sidebar() {
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate text-foreground">
-                {session.user.name || "User"}
-              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-semibold truncate text-foreground">
+                  {session.user.name || "User"}
+                </p>
+                {session.user.plan === "pro" ? (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    <Crown className="h-2.5 w-2.5" /> PRO
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-muted text-muted-foreground border border-border">
+                    FREE
+                  </span>
+                )}
+              </div>
               <p className="text-xs truncate text-muted-foreground">
                 {session.user.email}
               </p>

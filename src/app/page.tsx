@@ -232,9 +232,9 @@ export default async function Home() {
                   </li>
                 </ul>
               </div>
-              <Link href={isLoggedIn ? "/dashboard" : "/login"} className="mt-8">
+              <Link href={isLoggedIn ? "/billing" : "/login?mode=signup"} className="mt-8">
                 <Button className="w-full rounded-xl glow-indigo">
-                  {isLoggedIn ? "Go to Dashboard" : "Get Unlimited Pro"}
+                  {isLoggedIn ? "Manage Subscription" : "Get Unlimited Pro"}
                 </Button>
               </Link>
             </div>

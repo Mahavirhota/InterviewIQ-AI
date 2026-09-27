@@ -9,7 +9,8 @@ export default auth((req) => {
     nextUrl.pathname.startsWith("/dashboard") ||
     nextUrl.pathname.startsWith("/generator") ||
     nextUrl.pathname.startsWith("/practice") ||
-    nextUrl.pathname.startsWith("/analytics");
+    nextUrl.pathname.startsWith("/analytics") ||
+    nextUrl.pathname.startsWith("/billing");
 
   // Redirect to login if accessing protected route without being authenticated
   if (isProtectedRoute && !isLoggedIn) {
