@@ -1,5 +1,5 @@
 import Razorpay from "razorpay";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 
 const razorpay = new Razorpay({
@@ -7,7 +7,7 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET!,
 });
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

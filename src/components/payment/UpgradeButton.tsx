@@ -126,7 +126,7 @@ export function UpgradeButton({
     return (
       <div className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
         <CheckCircle2 className="h-5 w-5" />
-        You're now a Pro member! 🎉
+        You&apos;re now a Pro member! 🎉
       </div>
     );
   }
