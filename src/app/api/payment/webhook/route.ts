@@ -12,6 +12,8 @@ import { db } from "@/lib/db";
  *  - subscription.completed  → downgrade user to Free
  *  - subscription.halted     → downgrade user to Free
  */
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const signature = req.headers.get("x-razorpay-signature") ?? "";

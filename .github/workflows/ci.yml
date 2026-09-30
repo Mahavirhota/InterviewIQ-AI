@@ -19,6 +19,10 @@ jobs:
       AUTH_SECRET: "mock-auth-secret-for-ci-pipelines-12345"
       OPENAI_API_KEY: "mock-openai-key"
       NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+      RAZORPAY_KEY_ID: "rzp_test_mock_key_id"
+      RAZORPAY_KEY_SECRET: "mock_key_secret"
+      RAZORPAY_PLAN_ID: "plan_mock_id"
+      RAZORPAY_WEBHOOK_SECRET: "mock_webhook_secret"
 
     services:
       postgres:

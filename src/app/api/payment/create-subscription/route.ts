@@ -2,10 +2,18 @@ import Razorpay from "razorpay";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID!,
-  key_secret: process.env.RAZORPAY_KEY_SECRET!,
-});
+export const dynamic = "force-dynamic";
+
+function getRazorpay() {
+  const key_id = process.env.RAZORPAY_KEY_ID;
+  const key_secret = process.env.RAZORPAY_KEY_SECRET;
+
+  if (!key_id || !key_secret) {
+    throw new Error("Razorpay credentials are not configured.");
+  }
+
+  return new Razorpay({ key_id, key_secret });
+}
 
 export async function POST() {
   const session = await auth();
@@ -13,10 +21,20 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const planId = process.env.RAZORPAY_PLAN_ID;
+  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET || !planId) {
+    console.error("[RAZORPAY_SUBSCRIPTION_CREATE] Missing Razorpay credentials or plan ID");
+    return NextResponse.json(
+      { error: "Payment service is currently unavailable." },
+      { status: 500 }
+    );
+  }
+
   try {
+    const razorpay = getRazorpay();
     // Create a Razorpay subscription for the Pro plan
     const subscription = await razorpay.subscriptions.create({
-      plan_id: process.env.RAZORPAY_PLAN_ID!,
+      plan_id: planId,
       customer_notify: 1,
       total_count: 12, // 12 months
       quantity: 1,
